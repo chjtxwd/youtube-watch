@@ -2,7 +2,7 @@ name: Daily Python Script
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Runs every day at midnight UTC
+    - cron: '* * * * *' # Runs every day at midnight UTC
 
 jobs:
   run-script:
@@ -22,3 +22,8 @@ jobs:
         
       - name: Run Python script
         run: python3 main.py
+
+      - name: Submit Pul Request
+        uses: shimewtr/submit_pull_request@master
+        env:
+          GITHUB_ACCESS_TOKEN: ${{secrets.github_token}}
