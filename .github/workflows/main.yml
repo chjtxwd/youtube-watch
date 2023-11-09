@@ -2,7 +2,7 @@ name: Daily Python Script
 
 on:
   schedule:
-    - cron: '0 0 * * *' # Runs every day at midnight UTC
+    - cron: '* * * * *' # Runs every day at midnight UTC
 
 jobs:
   run-script:
@@ -25,3 +25,4 @@ jobs:
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5
+        token: ${{ secrets.PR_USER }}
