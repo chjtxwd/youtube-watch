@@ -1,5 +1,6 @@
 import sqlite3
 import subprocess
+import re
 
 def get_videos_without_upload_time(cursor):
     cursor.execute('''
@@ -16,11 +17,12 @@ videos = get_videos_without_upload_time(c)
 
 for video in videos:
     title, url = video
+    vid = re.sub(r'watch\?v=', '', url)
     full_url = 'https://www.youtube.com/' + url
     print(f'Downloading video: {title} ({full_url})')
 
     # 调用 yt-dlp 来下载视频
-    subprocess.run(['/root/yt-dlp_linux', full_url , '-P /r2/'])
+    subprocess.run(['/root/yt-dlp_linux', full_url , '-P /r2/'+vid+'.mp4'])
 
     # 更新视频的上传时间
     c.execute('''
