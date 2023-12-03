@@ -1,103 +1,77 @@
-import requests
-import json
+import feedparser
 import sqlite3
-from bs4 import BeautifulSoup
-from datetime import datetime
+from urllib.parse import urlparse, parse_qs
+import subprocess
+from sqlite3 import Error
 
-def get_html_text(url):
-    flaresolverr = 'https://flaresolverr.haijin666.top/v1'
-    headers = {
-    'Content-Type': 'application/json'
-     }
+# Parse the RSS feed
+url = "https://freshrss.haijin666.top/i/?a=rss&user=youtube&token=youtube666&hours=168"
+feed = feedparser.parse(url)
 
-    data = {
-    "cmd": "request.get",
-    "url": url,
-    "maxTimeout": 60000
-    }
+# SQLite database filename
+db_file = "rss_feed.db"
 
-    response = requests.post(flaresolverr, headers=headers, json=data)
-    response_text = response.text
-    return response_text
+# Create a connection to SQLite database
+# If the database does not exist, it will be created
+conn = None
+try:
+    conn = sqlite3.connect(db_file)
+except Error as e:
+    print(e)
 
+# Create cursor object
+cur = conn.cursor()
 
-def create_table(cursor):
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS videos (
-            id INTEGER PRIMARY KEY,
-            title TEXT,
-            description TEXT,
-            url TEXT,
-            longtitle TEXT,
-            longdescription TEXT,
-            created_at TIMESTAMP,
-            uploaded_at TIMESTAMP
-        )
-    ''')
+# Create table if not exists
+cur.execute("""
+    CREATE TABLE IF NOT EXISTS feed (
+        id INTEGER PRIMARY KEY,
+        title TEXT NOT NULL,
+        link TEXT NOT NULL,
+        vid TEXT,
+        description TEXT,
+        updated TEXT,
+        author TEXT,
+        published TEXT,
+        downloaded TEXT DEFAULT 'false'
+    )
+""")
 
-def video_exists(cursor, url):
-    cursor.execute('''
-        SELECT 1 FROM videos WHERE url = ?
-    ''', (url,))
-    return cursor.fetchone() is not None
+# Insert general feed information into the database
+cur.execute("""
+    INSERT INTO feed (title, link, description, updated)
+    VALUES (?, ?, ?, ?)
+""", (feed.feed.title, feed.feed.link, feed.feed.description, feed.feed.updated))
 
-def insert_video(cursor, video):
-    cursor.execute('''
-        INSERT INTO videos (title, description, url, created_at)
-        VALUES (?, ?, ?, ?)
-    ''', (video['text'], '', video['href'], datetime.now()))
+# Iterate through each item in the feed
+for entry in feed.entries:
+    # Insert each entry into the database
+    cur.execute("""
+        INSERT INTO feed (title, link, description, author, published)
+        VALUES (?, ?, ?, ?, ?)
+    """, (entry.title, entry.link, entry.description, entry.get("author", "N/A"), entry.published))
 
-def print_all_urls(cursor):
-    cursor.execute('''
-        SELECT url FROM videos
-    ''')
-    urls = cursor.fetchall()
-    for url in urls:
-        url =   +url
-
-
-url = "https://www.youtube.com/@cncf/videos"
-response = get_html_text(url)
-response = json.loads(response)
-html = response['solution']['response']
-soup = BeautifulSoup(html, 'html.parser')
-
-# 连接到 SQLite 数据库
-# 数据库不存在时会被自动创建
-conn = sqlite3.connect('my_database.db')
-c = conn.cursor()
-
-# 创建表
-create_table(c)
-
-# 查找所有ID为"video-title"的元素，并获取它们的href属性值
-video_title_elements = soup.find_all(id='video-title')
-for video_title_element in video_title_elements:
-    # 获取文本和href属性的值
-    text = video_title_element.text
-    href_value = video_title_element.parent['href']  # Assuming the parent element contains the href attribute
-
-    # 如果视频不存在于数据库中，则添加到数据库并打印出来
-    if not video_exists(c, href_value):
-        print(f'New video found: {text} ({href_value})')
-        insert_video(c, {'text': text, 'href': href_value})
-
-# 提交事务
+# Commit the changes
 conn.commit()
 
-# 关闭连接
-conn.close()
+# Query the database for entries where downloaded is not 'true'
+cur.execute("SELECT link FROM feed WHERE downloaded != 'true'")
+rows = cur.fetchall()
 
+# Print the link of each entry that has not been downloaded
+for row in rows:
+    row = str(row)
+    print(row)
+    # Use urlparse to break down the URL into components
+    parsed_url = urlparse(row)
 
-# 查找每一个 视频 url, 获得 long_description long_title
+    # Use parse_qs to turn the query string into a dictionary
+    query_string_dict = parse_qs(parsed_url.query)
 
-# 连接到 SQLite 数据库
-conn = sqlite3.connect('my_database.db')
-c = conn.cursor()
+    # Extract the 'v' parameter from the dictionary
+    v_param = query_string_dict.get('v', None)
 
-# 调用函数打印所有URL
-print("All URLs in the database:")
-print_all_urls(c)
+    subprocess.run(['/root/yt-dlp_linux', row , '-P /r2/'+v_param+'.mp4'])
 
-# 关闭连接
+# Close the connection to the database
 conn.close()
